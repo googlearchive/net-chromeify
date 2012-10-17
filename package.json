@@ -1,0 +1,25 @@
+{
+    "name" : "net-chromeify",
+    "version" : "0.0.1",
+    "description" : "A module that maps chrome net API's to node net namespace",
+    "main" : "index.js",
+    "repository" : {
+        "type" : "git",
+        "url" : "http://github.com/paulkinlan/net-chromeify.git"
+    },
+    "keywords" : [
+        "net",
+        "browser",
+        "eval"
+    ],
+    "devDependencies" : {
+        "browserify" : "1.9.x"
+    },
+    "author" : {
+        "name" : "Paul Kinlan",
+        "email" : "paul.kinlan@gmail.com",
+        "url" : "http://paul.kinlan.me"
+    },
+    "license" : "MIT/X11",
+    "engine" : { "node" : ">=0.8.0" }
+}
