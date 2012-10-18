@@ -30,8 +30,8 @@ net.connect = net.createConnection = function() {
   var options = {};
   var args = arguments;
   if(typeof args[0] === 'object') {
-    options.port = args[0];
-    options.host = "127.0.0.1";
+    options.port = args[0].port;
+    options.host = args[0].host || "127.0.0.1";
   }
   else if(typeof args[0] === 'number') {
     // there is a port
@@ -110,8 +110,8 @@ net.Socket.prototype.connect = function() {
   
   if(typeof args[0] === 'object') {
     // we have an options object.
-    options = args[0];
-    options.host = options.host || "127.0.0.1";
+    options.port = args[0].port;
+    options.host = args[0].host || "127.0.0.1";
   } 
   else if (typeof args[0] === 'string') {
     // throw an error, we can't do named pipes.
