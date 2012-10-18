@@ -212,7 +212,9 @@ net.Socket.prototype.ref = function() {};
 net.Socket.prototype.unref = function() {};
 net.Socket.prototype.pause = function() {};
 net.Socket.prototype.resume = function() {};
-net.Socket.prototype.end = function() {};
+net.Socket.prototype.end = function() {
+
+};
 
 
 Object.defineProperty(net.Socket.prototype, 'readyState', {
