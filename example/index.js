@@ -12,7 +12,7 @@ onload = function() {
     result.innerText = "";
   
     var opts = {
-      port: parseInt(host.port), 
+      port: parseInt(host.port) || 80, 
       host: host.hostname 
     };
 
