@@ -4,6 +4,29 @@ var util = require('util');
 var Buffer = require('buffer').Buffer;
 
 
+
+var stringToArrayBuffer = function(str) {
+  var buffer = new ArrayBuffer(str.length);
+  var uint8Array = new Uint8Array(buffer);
+  for(var i = 0; i < str.length; i++) {
+    uint8Array[i] = str.charCodeAt(i);
+  }
+  return buffer;
+};
+
+var bufferToArrayBuffer = function(buffer) {
+  return stringToArrayBuffer(buf.toString())
+};
+
+var arrayBufferToBuffer = function(buffer) {
+  var arrayBuffer = new ArrayBuffer(buffer.length);
+  var uint8Array = new Uint8Array(arrayBuffer);
+  for(var i = 0; i < buffer.length; i++) {
+    uint8Array[i] = buffer[i];
+  }
+  return buffer;
+};
+
 net.createServer = function(options, connectionListener) {};
 net.connect = net.createConnection = function() { 
   var options = {};
@@ -26,9 +49,9 @@ net.connect = net.createConnection = function() {
   var cb = args[args.length -1];
   cb = (typeof cb === 'function') ? cb : function() {};
   
-  var socket = new net.Socket(options, cb);
-
-  socket.connect(options, cb);
+  var socket = new net.Socket(options, function() { 
+    socket.connect(options, cb);
+  });
   
   return socket;
 };
@@ -41,14 +64,14 @@ net.Server = function() {
   this.__defineGetter__("connections", function() { return _connections; });
 };
 
-
 net.Server.prototype.listen = function() {};
 net.Server.prototype.close = function() {};
 net.Server.prototype.address = function() {};
 
-net.Socket = function(options) {
+net.Socket = function(options, createCallback) {
   var self = this;
   options = options || {};
+  createCallback = createCallback || function() {};
   this._fd = options.fd;
   this._type = options.type;
   //assert(this._type === "tcp6", "Only tcp4 is allowed");
@@ -58,7 +81,8 @@ net.Socket = function(options) {
   this._encoding;
   
   chrome.socket.create("tcp", {}, function(createInfo) {
-    self._socketInfo = createInfo; 
+    self._socketInfo = createInfo;
+    createCallback();
   });
 };
 
@@ -140,7 +164,55 @@ net.Socket.prototype.setKeepAlive = function(enable, delay) {
   chrome.socket.setKeepAlive(self._socketInfo.socketId, enable, initialDelay, function() {});
 };
 
-net.Socket.prototype.write = function(data, arg1, arg2) {};
+net.Socket.prototype._read = function() {
+  var self = this;
+  chrome.socket.read(self._socketInfo.socketId, function(readInfo) {
+    // ArrayBuffer to Buffer if no encoding.
+    var buffer = arrayBufferToBuffer(readInfo.data);
+    self.emit('data', buffer);
+  });
+
+  // enque another read soon. TODO: Is there are better way to controll speed.
+  self._readTimer = setTimeout(self._read, 100);
+}
+
+net.Socket.prototype.write = function(data, encoding, callback) {
+  var buffer;
+  var self = this;
+  
+  encoding = encoding || "UTF8";
+  callback = callback || function() {};
+
+  if(typeof data === 'string') {
+    buffer = stringToArrayBuffer(data);
+  }
+  else if(data instanceof Buffer) {
+    buffer = bufferToArrayBuffer(data);
+  }
+  else {
+    // throw an error because we can't do anything.
+  }
+
+  self._resetTimeout();
+
+  chrome.socket.write(self._socketInfo.socketId, buffer, function(writeInfo) {
+    callback(); 
+  });
+
+  return true;
+};
+
+net.Socket.prototype._resetTimeout = function() {
+  var self = this;
+  if(!!self._timeout == false) clearTimeout(self._timeout);
+  if(!!self._timeoutValue) self._timeout = setTimeout(function() { self.emit('timeout') }, self._timeoutValue);
+};
+
+net.Socket.prototype.setTimeout = function(timeout, callback) {
+  this._timeoutValue = timeout;
+  this._resetTimeout();
+};
+
 net.Socket.prototype.ref = function() {};
 net.Socket.prototype.unref = function() {};
 net.Socket.prototype.pause = function() {};
