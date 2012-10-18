@@ -3,8 +3,6 @@ var events = require('events');
 var util = require('util');
 var Buffer = require('buffer').Buffer;
 
-
-
 var stringToArrayBuffer = function(str) {
   var buffer = new ArrayBuffer(str.length);
   var uint8Array = new Uint8Array(buffer);
@@ -18,11 +16,11 @@ var bufferToArrayBuffer = function(buffer) {
   return stringToArrayBuffer(buf.toString())
 };
 
-var arrayBufferToBuffer = function(buffer) {
-  var arrayBuffer = new ArrayBuffer(buffer.length);
+var arrayBufferToBuffer = function(arrayBuffer) {
+  var buffer = new Buffer(arrayBuffer.byteLength);
   var uint8Array = new Uint8Array(arrayBuffer);
-  for(var i = 0; i < buffer.length; i++) {
-    uint8Array[i] = buffer[i];
+  for(var i = 0; i < uint8Array.length; i++) {
+    buffer.writeUInt8(uint8Array[i], i);
   }
   return buffer;
 };
@@ -83,6 +81,8 @@ net.Socket = function(options, createCallback) {
   chrome.socket.create("tcp", {}, function(createInfo) {
     self._socketInfo = createInfo;
     createCallback();
+    // start trying to read
+    self._read();
   });
 };
 
@@ -132,12 +132,6 @@ net.Socket.prototype.connect = function() {
   chrome.socket.connect(self._socketInfo.socketId, options.host, options.port, function(result) {
     if(result == 0) {
       self.emit('connect');
-      // Need to kick off the read.
-      chrome.socket.read(self._socketInfo.socketId, function(readInfo) {
-        var data = readInfo.data;
-        // convert into a buffer
-        self.emit('data', data);
-      });
     } 
     else {
       self.emit('error', new Error("Unable to connect"));
@@ -167,13 +161,14 @@ net.Socket.prototype.setKeepAlive = function(enable, delay) {
 net.Socket.prototype._read = function() {
   var self = this;
   chrome.socket.read(self._socketInfo.socketId, function(readInfo) {
+    if(readInfo.resultCode < 0) return; 
     // ArrayBuffer to Buffer if no encoding.
     var buffer = arrayBufferToBuffer(readInfo.data);
     self.emit('data', buffer);
   });
 
   // enque another read soon. TODO: Is there are better way to controll speed.
-  self._readTimer = setTimeout(self._read, 100);
+  self._readTimer = setTimeout(self._read.bind(self), 100);
 }
 
 net.Socket.prototype.write = function(data, encoding, callback) {
