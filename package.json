@@ -20,6 +20,6 @@
         "email" : "paul.kinlan@gmail.com",
         "url" : "http://paul.kinlan.me"
     },
-    "license" : "MIT/X11",
+    "license" : "Apache2",
     "engine" : { "node" : ">=0.8.0" }
 }

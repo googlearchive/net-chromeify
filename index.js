@@ -1,6 +1,7 @@
 var net = module.exports;
 var events = require('events');
 var util = require('util');
+var Stream = require('stream');
 var Buffer = require('buffer').Buffer;
 
 var stringToArrayBuffer = function(str) {
@@ -25,7 +26,23 @@ var arrayBufferToBuffer = function(arrayBuffer) {
   return buffer;
 };
 
-net.createServer = function(options, connectionListener) {};
+net.createServer = function() {
+  var options = {
+  };
+  var args = arguments;
+
+  var cb = args[args.length -1];
+  cb = (typeof cb === 'function') ? cb : function() {};
+
+  if(typeof args[0] === 'object') {
+    options = args[0];
+  }
+ 
+  var server = new net.Server(options);
+  server.on("connection", cb);
+  return server;
+};
+
 net.connect = net.createConnection = function() { 
   var options = {};
   var args = arguments;
@@ -60,33 +77,90 @@ net.Server = function() {
   
   var _connections = 0;
   this.__defineGetter__("connections", function() { return _connections; });
+
+  events.EventEmitter.call(this);
 };
 
-net.Server.prototype.listen = function() {};
-net.Server.prototype.close = function() {};
+util.inherits(net.Server, events.EventEmitter);
+
+net.Server.prototype.listen = function() {
+  var self = this;
+  var options = {};
+  var args = arguments;
+  
+  if (typeof args[0] === 'number') {
+    // assume port. and host.
+    options.port = args[0];
+    options.host = "127.0.0.1";
+    options.backlog = 511;
+    if(typeof args[1] === 'string') {
+      options.host = args[1];
+    }
+    else if(typeof args[1] === 'number') {
+      options.backlog = args[1];
+    }
+    
+    if(typeof args[2] === 'number') {
+      options.backlog = args[2];
+    }
+  }
+  else {
+    // throw.
+  }
+
+  this._serverSocket = new net.Socket(options);
+  
+  var cb = args[args.length -1];
+  cb = (typeof cb === 'function') ? cb : function() {};
+  
+  self.on('listening', cb);
+
+  self._serverSocket.on("_created", function() {
+    // Socket created, now turn it into a server socket.
+    chrome.socket.listen(self._serverSocket._socketInfo.socketId, options.host, options.port, options.backlog, function() {
+      self.emit('listening');
+      chrome.socket.accept(self._serverSocket._socketInfo.socketId, self._accept.bind(self))
+    }); 
+  });
+};
+
+net.Server.prototype._accept = function(acceptInfo) {
+  // Create a new socket for the handle the response.
+  var self = this;
+  var socket = new net.Socket();
+  
+  socket._socketInfo = acceptInfo;
+  self.emit("connection", socket);
+  chrome.socket.accept(self._serverSocket._socketInfo.socketId, self._accept.bind(self))
+};
+
+net.Server.prototype.close = function(callback) {
+  self.on("close", callback || function() {});
+  self._serverSocket.destroy();
+  self.emit("close");
+};
 net.Server.prototype.address = function() {};
 
-net.Socket = function(options, createCallback) {
+net.Socket = function(options) {
   var self = this;
   options = options || {};
-  createCallback = createCallback || function() {};
   this._fd = options.fd;
-  this._type = options.type;
+  this._type = options.type || "tcp";
   //assert(this._type === "tcp6", "Only tcp4 is allowed");
   //assert(this._type === "unix", "Only tcp4 is allowed");
-  this._type = allowHalfOpen = options.allowHalfOpen;
+  this._type = allowHalfOpen = options.allowHalfOpen || false;
   this._socketInfo = 0;
   this._encoding;
   
   chrome.socket.create("tcp", {}, function(createInfo) {
     self._socketInfo = createInfo;
-    createCallback();
+    self.emit("_created"); // This event doesn't exist in the API, it is here because Chrome is async 
     // start trying to read
     self._read();
   });
 };
 
-util.inherits(net.Socket, events.EventEmitter);
+util.inherits(net.Socket, Stream);
 
 /*
   Events:
@@ -140,6 +214,7 @@ net.Socket.prototype.connect = function() {
 };
 
 net.Socket.prototype.destroy = function() {
+  chrome.socket.disconnect(this._socketInfo.socketId);
   chrome.socket.destroy(this._socketInfo.socketId);
 };
 net.Socket.prototype.destroySoon = function() {};
