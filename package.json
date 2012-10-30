@@ -5,7 +5,7 @@
     "main" : "index.js",
     "repository" : {
         "type" : "git",
-        "url" : "http://github.com/paulkinlan/net-browserify.git"
+        "url" : "http://github.com/GoogleChrome/net-browserify.git"
     },
     "keywords" : [
         "net",
@@ -18,7 +18,7 @@
     "author" : {
         "name" : "Paul Kinlan",
         "email" : "paul.kinlan@gmail.com",
-        "url" : "http://paul.kinlan.me"
+        "url" : "http://github.com/PaulKinlan"
     },
     "license" : "Apache2",
     "engine" : { "node" : ">=0.8.0" }

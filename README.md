@@ -1,7 +1,7 @@
-net-chromeify
-=====================
+net-browserify
+==============
 
-To build into a script `browserify -r net-chromeify:net`, now this will use the net namespace.
+To build into a script `browserify -r net`, now this will use the net namespace.
 
 Testing the example
 -------------------
