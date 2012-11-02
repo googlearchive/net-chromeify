@@ -30,7 +30,7 @@ var stringToArrayBuffer = function(str) {
 };
 
 var bufferToArrayBuffer = function(buffer) {
-  return stringToArrayBuffer(buf.toString())
+  return stringToArrayBuffer(buffer.toString())
 };
 
 var arrayBufferToBuffer = function(arrayBuffer) {
