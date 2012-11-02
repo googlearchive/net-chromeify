@@ -154,6 +154,7 @@ require.alias = function (from, to) {
         ;
         
         var require_ = function (file) {
+            dirname = (dirname == ".") ? filename : dirname ;
             var requiredModule = require(file, dirname);
             var cached = require.cache[require.resolve(file, dirname)];
 
@@ -394,9 +395,26 @@ process.binding = function (name) {
 require.define("/package.json",function(require,module,exports,__dirname,__filename,process,global){module.exports = {"main":"index.js"}
 });
 
-require.define("net",function(require,module,exports,__dirname,__filename,process,global){var net = module.exports;
+require.define("net",function(require,module,exports,__dirname,__filename,process,global){/*
+   Copyright 2012 Google Inc
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+var net = module.exports;
 var events = require('events');
 var util = require('util');
+var Stream = require('stream');
 var Buffer = require('buffer').Buffer;
 
 var stringToArrayBuffer = function(str) {
@@ -421,7 +439,23 @@ var arrayBufferToBuffer = function(arrayBuffer) {
   return buffer;
 };
 
-net.createServer = function(options, connectionListener) {};
+net.createServer = function() {
+  var options = {
+  };
+  var args = arguments;
+
+  var cb = args[args.length -1];
+  cb = (typeof cb === 'function') ? cb : function() {};
+
+  if(typeof args[0] === 'object') {
+    options = args[0];
+  }
+ 
+  var server = new net.Server(options);
+  server.on("connection", cb);
+  return server;
+};
+
 net.connect = net.createConnection = function() { 
   var options = {};
   var args = arguments;
@@ -443,7 +477,8 @@ net.connect = net.createConnection = function() {
   var cb = args[args.length -1];
   cb = (typeof cb === 'function') ? cb : function() {};
   
-  var socket = new net.Socket(options, function() { 
+  var socket = new net.Socket(options);
+  socket.on("_created", function() { 
     socket.connect(options, cb);
   });
   
@@ -456,33 +491,90 @@ net.Server = function() {
   
   var _connections = 0;
   this.__defineGetter__("connections", function() { return _connections; });
+
+  events.EventEmitter.call(this);
 };
 
-net.Server.prototype.listen = function() {};
-net.Server.prototype.close = function() {};
+util.inherits(net.Server, events.EventEmitter);
+
+net.Server.prototype.listen = function() {
+  var self = this;
+  var options = {};
+  var args = arguments;
+  
+  if (typeof args[0] === 'number') {
+    // assume port. and host.
+    options.port = args[0];
+    options.host = "127.0.0.1";
+    options.backlog = 511;
+    if(typeof args[1] === 'string') {
+      options.host = args[1];
+    }
+    else if(typeof args[1] === 'number') {
+      options.backlog = args[1];
+    }
+    
+    if(typeof args[2] === 'number') {
+      options.backlog = args[2];
+    }
+  }
+  else {
+    // throw.
+  }
+
+  this._serverSocket = new net.Socket(options);
+  
+  var cb = args[args.length -1];
+  cb = (typeof cb === 'function') ? cb : function() {};
+  
+  self.on('listening', cb);
+
+  self._serverSocket.on("_created", function() {
+    // Socket created, now turn it into a server socket.
+    chrome.socket.listen(self._serverSocket._socketInfo.socketId, options.host, options.port, options.backlog, function() {
+      self.emit('listening');
+      chrome.socket.accept(self._serverSocket._socketInfo.socketId, self._accept.bind(self))
+    }); 
+  });
+};
+
+net.Server.prototype._accept = function(acceptInfo) {
+  // Create a new socket for the handle the response.
+  var self = this;
+  var socket = new net.Socket();
+  
+  socket._socketInfo = acceptInfo;
+  self.emit("connection", socket);
+  chrome.socket.accept(self._serverSocket._socketInfo.socketId, self._accept.bind(self))
+};
+
+net.Server.prototype.close = function(callback) {
+  self.on("close", callback || function() {});
+  self._serverSocket.destroy();
+  self.emit("close");
+};
 net.Server.prototype.address = function() {};
 
-net.Socket = function(options, createCallback) {
+net.Socket = function(options) {
   var self = this;
   options = options || {};
-  createCallback = createCallback || function() {};
   this._fd = options.fd;
-  this._type = options.type;
+  this._type = options.type || "tcp";
   //assert(this._type === "tcp6", "Only tcp4 is allowed");
   //assert(this._type === "unix", "Only tcp4 is allowed");
-  this._type = allowHalfOpen = options.allowHalfOpen;
+  this._type = allowHalfOpen = options.allowHalfOpen || false;
   this._socketInfo = 0;
   this._encoding;
   
   chrome.socket.create("tcp", {}, function(createInfo) {
     self._socketInfo = createInfo;
-    createCallback();
+    self.emit("_created"); // This event doesn't exist in the API, it is here because Chrome is async 
     // start trying to read
     self._read();
   });
 };
 
-util.inherits(net.Socket, events.EventEmitter);
+util.inherits(net.Socket, Stream);
 
 /*
   Events:
@@ -536,6 +628,7 @@ net.Socket.prototype.connect = function() {
 };
 
 net.Socket.prototype.destroy = function() {
+  chrome.socket.disconnect(this._socketInfo.socketId);
   chrome.socket.destroy(this._socketInfo.socketId);
 };
 net.Socket.prototype.destroySoon = function() {};
@@ -608,7 +701,9 @@ net.Socket.prototype.ref = function() {};
 net.Socket.prototype.unref = function() {};
 net.Socket.prototype.pause = function() {};
 net.Socket.prototype.resume = function() {};
-net.Socket.prototype.end = function() {};
+net.Socket.prototype.end = function() {
+
+};
 
 
 Object.defineProperty(net.Socket.prototype, 'readyState', {
@@ -1122,7 +1217,7 @@ exports.format = function(f) {
   var args = arguments;
   var len = args.length;
   var str = String(f).replace(formatRegExp, function(x) {
-    if (x === '%') return '%';
+    if (x === '%%') return '%';
     if (i >= len) return x;
     switch (x) {
       case '%s': return String(args[i++]);
@@ -1140,6 +1235,128 @@ exports.format = function(f) {
     }
   }
   return str;
+};
+
+});
+
+require.define("stream",function(require,module,exports,__dirname,__filename,process,global){var events = require('events');
+var util = require('util');
+
+function Stream() {
+  events.EventEmitter.call(this);
+}
+util.inherits(Stream, events.EventEmitter);
+module.exports = Stream;
+// Backwards-compat with node 0.4.x
+Stream.Stream = Stream;
+
+Stream.prototype.pipe = function(dest, options) {
+  var source = this;
+
+  function ondata(chunk) {
+    if (dest.writable) {
+      if (false === dest.write(chunk) && source.pause) {
+        source.pause();
+      }
+    }
+  }
+
+  source.on('data', ondata);
+
+  function ondrain() {
+    if (source.readable && source.resume) {
+      source.resume();
+    }
+  }
+
+  dest.on('drain', ondrain);
+
+  // If the 'end' option is not supplied, dest.end() will be called when
+  // source gets the 'end' or 'close' events.  Only dest.end() once, and
+  // only when all sources have ended.
+  if (!dest._isStdio && (!options || options.end !== false)) {
+    dest._pipeCount = dest._pipeCount || 0;
+    dest._pipeCount++;
+
+    source.on('end', onend);
+    source.on('close', onclose);
+  }
+
+  var didOnEnd = false;
+  function onend() {
+    if (didOnEnd) return;
+    didOnEnd = true;
+
+    dest._pipeCount--;
+
+    // remove the listeners
+    cleanup();
+
+    if (dest._pipeCount > 0) {
+      // waiting for other incoming streams to end.
+      return;
+    }
+
+    dest.end();
+  }
+
+
+  function onclose() {
+    if (didOnEnd) return;
+    didOnEnd = true;
+
+    dest._pipeCount--;
+
+    // remove the listeners
+    cleanup();
+
+    if (dest._pipeCount > 0) {
+      // waiting for other incoming streams to end.
+      return;
+    }
+
+    dest.destroy();
+  }
+
+  // don't leave dangling pipes when there are errors.
+  function onerror(er) {
+    cleanup();
+    if (this.listeners('error').length === 0) {
+      throw er; // Unhandled stream error in pipe.
+    }
+  }
+
+  source.on('error', onerror);
+  dest.on('error', onerror);
+
+  // remove all the event listeners that were added.
+  function cleanup() {
+    source.removeListener('data', ondata);
+    dest.removeListener('drain', ondrain);
+
+    source.removeListener('end', onend);
+    source.removeListener('close', onclose);
+
+    source.removeListener('error', onerror);
+    dest.removeListener('error', onerror);
+
+    source.removeListener('end', cleanup);
+    source.removeListener('close', cleanup);
+
+    dest.removeListener('end', cleanup);
+    dest.removeListener('close', cleanup);
+  }
+
+  source.on('end', cleanup);
+  source.on('close', cleanup);
+
+  dest.on('end', cleanup);
+  dest.on('close', cleanup);
+
+  dest.emit('pipe', source);
+
+  // Allow for unix-like usage: A.pipe(B).pipe(C)
+  return dest;
 };
 
 });
@@ -3741,4 +3958,3 @@ function lastBraceInKey(str) {
 }
 
 });
-

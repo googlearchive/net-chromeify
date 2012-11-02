@@ -80,7 +80,8 @@ net.connect = net.createConnection = function() {
   var cb = args[args.length -1];
   cb = (typeof cb === 'function') ? cb : function() {};
   
-  var socket = new net.Socket(options, function() { 
+  var socket = new net.Socket(options);
+  socket.on("_created", function() { 
     socket.connect(options, cb);
   });
   
