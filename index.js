@@ -241,13 +241,13 @@ net.Socket.prototype.setEncoding = function(encoding) {
 
 net.Socket.prototype.setNoDelay = function(noDelay) {
   noDelay = (noDelay === undefined) ? true : noDelay;
-  chrome.socket.setNoDelay(self._socketInfo.socketId, noDelay, function() {});
+  chrome.socket.setNoDelay(this._socketInfo.socketId, noDelay, function() {});
 };
 
 net.Socket.prototype.setKeepAlive = function(enable, delay) {
   enable = (enable === 'undefined') ? false : enable;
   delay = (delay === 'undefined') ? 0 : delay;
-  chrome.socket.setKeepAlive(self._socketInfo.socketId, enable, initialDelay, function() {});
+  chrome.socket.setKeepAlive(this._socketInfo.socketId, enable, initialDelay, function() {});
 };
 
 net.Socket.prototype._read = function() {
